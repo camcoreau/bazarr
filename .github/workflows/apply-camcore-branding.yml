@@ -1,0 +1,109 @@
+name: Apply CamCore repository branding
+
+on:
+  push:
+    branches:
+      - branding/camcore-logo-2026-08-30
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branding branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Insert the current CamCore banner
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          candidates = [Path("README.md"), Path("readme.md"), Path("README.MD")]
+          readme = next((path for path in candidates if path.is_file()), None)
+          if readme is None:
+              raise SystemExit("No root README file was found")
+
+          raw = readme.read_text(encoding="utf-8")
+          newline = "\r\n" if "\r\n" in raw else "\n"
+          text = raw.replace("\r\n", "\n")
+
+          block = "\n".join([
+              "<!-- CAMCORE-REPOSITORY-BRANDING:START -->",
+              '<p align="center">',
+              '  <a href="https://camcore.au">',
+              '    <img src=".github/brand/camcore-repository-banner.svg" alt="CamCore" width="520">',
+              "  </a>",
+              "</p>",
+              "<!-- CAMCORE-REPOSITORY-BRANDING:END -->",
+          ])
+
+          marker = re.compile(
+              r"<!-- CAMCORE-REPOSITORY-BRANDING:START -->.*?"
+              r"<!-- CAMCORE-REPOSITORY-BRANDING:END -->",
+              re.DOTALL,
+          )
+
+          if marker.search(text):
+              updated = marker.sub(block, text, count=1)
+          else:
+              leading_logo = re.match(
+                  r"\A(?P<logo>(?:<picture\b.*?</picture>|"
+                  r"<p\b[^>]*align=[\"']center[\"'][^>]*>.*?</p>))\s*",
+                  text,
+                  flags=re.IGNORECASE | re.DOTALL,
+              )
+              if leading_logo and re.search(r"camcore", leading_logo.group("logo"), re.IGNORECASE):
+                  remainder = text[leading_logo.end():].lstrip("\n")
+                  updated = f"{block}\n\n{remainder}"
+              else:
+                  lines = text.splitlines(keepends=True)
+                  index = 0
+                  if lines and lines[0].lstrip().startswith("> [!"):
+                      while index < len(lines):
+                          current = lines[index]
+                          if current.lstrip().startswith(">") or not current.strip():
+                              index += 1
+                              continue
+                          break
+
+                      if index < len(lines) and lines[index].strip() == "---":
+                          index += 1
+                          while index < len(lines) and not lines[index].strip():
+                              index += 1
+
+                      before = "".join(lines[:index]).rstrip()
+                      after = "".join(lines[index:]).lstrip("\n")
+                      updated = f"{before}\n\n{block}\n\n{after}"
+                  else:
+                      updated = f"{block}\n\n{text.lstrip(chr(10))}"
+
+          updated = updated.rstrip() + "\n"
+          if newline == "\r\n":
+              updated = updated.replace("\n", "\r\n")
+
+          if updated != raw:
+              readme.write_text(updated, encoding="utf-8", newline="")
+              print(f"Updated {readme}")
+          else:
+              print(f"No change required for {readme}")
+          PY
+
+      - name: Commit README branding
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "No README change to commit"
+            exit 0
+          fi
+          git commit -m "Adopt the current CamCore repository logo"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
