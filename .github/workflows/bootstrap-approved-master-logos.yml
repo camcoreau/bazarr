@@ -1,0 +1,80 @@
+name: Apply approved CamCore master logos
+
+on:
+  push:
+    branches:
+      - branding/approved-master-logos-2026-08-30
+
+permissions:
+  contents: write
+
+jobs:
+  apply-approved-master-logos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branding branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Apply exact files from 01_Master_Logos
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p .github/brand
+          cat .github/brand-source/dark.*.part | base64 --decode | gzip --decompress > .github/brand/CamCore_Logo_On_Dark.svg
+          python3 - <<'PY_LOGO'
+          from pathlib import Path
+          source = Path('.github/brand/CamCore_Logo_On_Dark.svg').read_bytes()
+          target = source.replace(b'#FFFFFF', b'#000000', 1)
+          Path('.github/brand/CamCore_Logo_On_Light.svg').write_bytes(target)
+          PY_LOGO
+
+          cat > /tmp/camcore-logo-sha256 <<'EOF'
+          ddc9b32a801e1331fe136eba1238cc72ce30b826eb3d801800eae795cfca9352  .github/brand/CamCore_Logo_On_Dark.svg
+          020ab05747d558e2247db2edec23501302c61e5cbfd688944519ef8b92ab51dd  .github/brand/CamCore_Logo_On_Light.svg
+          EOF
+          sha256sum --check /tmp/camcore-logo-sha256
+
+          readme=''
+          for candidate in README.md README.MD readme.md Readme.md; do
+            if [ -f "$candidate" ]; then readme="$candidate"; break; fi
+          done
+          test -n "$readme"
+
+          README_PATH="$readme" python3 - <<'PY_README'
+          import os
+          from pathlib import Path
+          path = Path(os.environ['README_PATH'])
+          text = path.read_text(encoding='utf-8')
+          start = '<!-- CAMCORE-REPOSITORY-BRANDING:START -->'
+          end = '<!-- CAMCORE-REPOSITORY-BRANDING:END -->'
+          replacement = '''<!-- CAMCORE-REPOSITORY-BRANDING:START -->
+          <p align="center">
+            <a href="https://camcore.au">
+              <picture>
+                <source media="(prefers-color-scheme: dark)" srcset=".github/brand/CamCore_Logo_On_Dark.svg">
+                <source media="(prefers-color-scheme: light)" srcset=".github/brand/CamCore_Logo_On_Light.svg">
+                <img src=".github/brand/CamCore_Logo_On_Light.svg" alt="CamCore" width="520">
+              </picture>
+            </a>
+          </p>
+          <!-- CAMCORE-REPOSITORY-BRANDING:END -->'''
+          if start not in text or end not in text:
+              raise SystemExit('Existing CamCore repository-branding markers were not found.')
+          before, remainder = text.split(start, 1)
+          _, after = remainder.split(end, 1)
+          path.write_text(before.rstrip() + '\n\n' + replacement + after, encoding='utf-8')
+          PY_README
+
+          rm -rf .github/brand-source
+          rm -f .github/brand/camcore-repository-banner.svg
+          rm -f .github/workflows/bootstrap-approved-master-logos.yml
+
+          git config user.name 'camcore.au'
+          git config user.email '267798321+camcoreau@users.noreply.github.com'
+          git add -A
+          git commit -m 'Use approved CamCore master logo assets'
+          git push origin "HEAD:${{ github.ref_name }}"
