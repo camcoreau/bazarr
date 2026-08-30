@@ -1,6 +1,14 @@
 > [!NOTE]
 > **Fork provenance.** This repository is retained under the CamCore GitHub account as a fork of [morpheus65535/bazarr](https://github.com/morpheus65535/bazarr). The current default branch contains no CamCore-specific implementation. Its presence does not indicate an active CamCore deployment, CamCore operational support or original CamCore authorship. Use the upstream project for product documentation and support. The upstream README continues below unchanged, and the repository's licence text remains unmodified.
 
+<!-- CAMCORE-REPOSITORY-BRANDING:START -->
+<p align="center">
+  <a href="https://camcore.au">
+    <img src=".github/brand/camcore-repository-banner.svg" alt="CamCore" width="520">
+  </a>
+</p>
+<!-- CAMCORE-REPOSITORY-BRANDING:END -->
+
 <p align="center">
   <img src="frontend/public/images/logo128.png" alt="Bazarr logo" width="96">
 </p>
